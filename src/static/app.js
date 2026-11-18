@@ -12,6 +12,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Clear loading message
       activitiesList.innerHTML = "";
+      while (activitySelect.options.length > 1) {
+        activitySelect.remove(1);
+      }
 
       // Populate activities list
       Object.entries(activities).forEach(([name, details]) => {
@@ -27,6 +30,80 @@ document.addEventListener("DOMContentLoaded", () => {
           <p><strong>Availability:</strong> ${spotsLeft} spots left</p>
         `;
 
+        const participantsSection = document.createElement("div");
+        participantsSection.className = "participants-section";
+
+        const participantsHeading = document.createElement("h5");
+        participantsHeading.textContent = `Participants (${details.participants.length})`;
+        participantsSection.appendChild(participantsHeading);
+
+        const participantsList = document.createElement("ul");
+        participantsList.className = "participants-list";
+        const availabilityParagraph = activityCard.querySelector("p:nth-of-type(3)");
+        const availabilityLabel = availabilityParagraph.querySelector("strong");
+
+        details.participants.forEach((participant) => {
+          const participantItem = document.createElement("li");
+          participantItem.className = "participant-item";
+
+          const participantName = document.createElement("span");
+          participantName.textContent = participant;
+          participantItem.appendChild(participantName);
+
+          const deleteButton = document.createElement("button");
+          deleteButton.type = "button";
+          deleteButton.className = "participant-delete-button";
+          deleteButton.setAttribute("aria-label", `Unregister ${participant} from ${name}`);
+          deleteButton.title = `Unregister ${participant}`;
+
+          const deleteIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          deleteIcon.setAttribute("viewBox", "0 0 24 24");
+          deleteIcon.setAttribute("aria-hidden", "true");
+          const deleteIconPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+          deleteIconPath.setAttribute("d", "M4 7h16M10 11v6m4-6v6M6 7l1 14h10l1-14M9 7V4h6v3");
+          deleteIcon.appendChild(deleteIconPath);
+          deleteButton.appendChild(deleteIcon);
+
+          deleteButton.addEventListener("click", async () => {
+            deleteButton.disabled = true;
+
+            try {
+              const response = await fetch(
+                `/activities/${encodeURIComponent(name)}/participants?email=${encodeURIComponent(participant)}`,
+                { method: "DELETE" }
+              );
+              const result = await response.json();
+
+              if (!response.ok) {
+                messageDiv.textContent = result.detail || "Unable to unregister participant.";
+                messageDiv.className = "error";
+                messageDiv.classList.remove("hidden");
+                deleteButton.disabled = false;
+                return;
+              }
+
+              details.participants.splice(details.participants.indexOf(participant), 1);
+              participantItem.remove();
+              participantsHeading.textContent = `Participants (${details.participants.length})`;
+              availabilityParagraph.replaceChildren(
+                availabilityLabel,
+                document.createTextNode(` ${details.max_participants - details.participants.length} spots left`)
+              );
+            } catch (error) {
+              messageDiv.textContent = "Failed to unregister participant. Please try again.";
+              messageDiv.className = "error";
+              messageDiv.classList.remove("hidden");
+              deleteButton.disabled = false;
+              console.error("Error unregistering participant:", error);
+            }
+          });
+
+          participantItem.appendChild(deleteButton);
+          participantsList.appendChild(participantItem);
+        });
+
+        participantsSection.appendChild(participantsList);
+        activityCard.appendChild(participantsSection);
         activitiesList.appendChild(activityCard);
 
         // Add option to select dropdown
@@ -62,6 +139,7 @@ document.addEventListener("DOMContentLoaded", () => {
         messageDiv.textContent = result.message;
         messageDiv.className = "success";
         signupForm.reset();
+        await fetchActivities();
       } else {
         messageDiv.textContent = result.detail || "An error occurred";
         messageDiv.className = "error";
